@@ -1,0 +1,1492 @@
+{
+  "name": "CRM - 2. Actualizar Estado de Lead",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "alta-lead",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "338b834a-2048-4154-8f2b-2e3aa8079b5c",
+      "name": "Webhook Alta Lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1104,
+        144
+      ],
+      "webhookId": "crm-alta-lead-001"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-nombre",
+              "name": "nombre",
+              "value": "={{ $json.body.nombre ?? $json.nombre ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-email",
+              "name": "email",
+              "value": "={{ ($json.body.email ?? $json.email ?? '').toLowerCase().trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "field-telefono",
+              "name": "telefono",
+              "value": "={{ ($json.body.telefono ?? $json.telefono ?? '').toString().replace(/\\s/g, '') }}",
+              "type": "string"
+            },
+            {
+              "id": "field-empresa",
+              "name": "empresa",
+              "value": "={{ $json.body.empresa ?? $json.empresa ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-comercial",
+              "name": "comercial",
+              "value": "={{ $json.body.comercial ?? $json.comercial ?? 'Sin asignar' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-origen",
+              "name": "origen",
+              "value": "={{ $json.body.origen ?? $json.origen ?? 'manual' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-observaciones",
+              "name": "observaciones",
+              "value": "={{ $json.body.observaciones ?? $json.observaciones ?? '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a565ae66-801c-45c3-882c-07dd84730022",
+      "name": "Normalizar Datos",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -880,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1H1lAZFDVQtYx26SyuLmtvPn63qkCb5g0cF8v1X25ehY/edit?gid=1351226275#gid=1351226275",
+          "__regex": "https:\\/\\/(?:drive|docs)\\.google\\.com(?:\\/.*|)\\/d\\/([0-9a-zA-Z\\-_]+)(?:\\/.*|)"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "detectAutomatically"
+            }
+          },
+          "outputFormatting": {
+            "values": {
+              "general": "UNFORMATTED_VALUE",
+              "date": "FORMATTED_STRING"
+            }
+          }
+        }
+      },
+      "id": "0dc75a82-8ab8-4c57-9a05-2756f192a489",
+      "name": "Leer Todos los Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -656,
+        144
+      ],
+      "retryOnFail": true,
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZL4IngF0c4bQC5tD",
+          "name": "Google Sheets CRM"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const leadNuevo = $('Normalizar Datos').first().json;\nconst emailNuevo = (leadNuevo.email || '').toLowerCase().trim();\nconst telefonoNuevo = (leadNuevo.telefono || '').toString().replace(/\\s/g, '');\n\nlet leadsExistentes = [];\ntry {\n  leadsExistentes = $('Leer Todos los Leads').all();\n} catch(e) {\n  leadsExistentes = [];\n}\n\nlet esDuplicado = false;\nlet leadExistente = null;\n\nfor (const item of leadsExistentes) {\n  const emailExistente = (item.json['correo electrónico'] || item.json.email || '').toLowerCase().trim();\n  const telefonoExistente = (item.json['teléfono'] || item.json.telefono || '').toString().replace(/\\s/g, '');\n\n  if (emailNuevo && emailExistente && emailNuevo === emailExistente) {\n    esDuplicado = true;\n    leadExistente = item.json;\n    break;\n  }\n  if (telefonoNuevo && telefonoExistente && telefonoNuevo.length > 6 && telefonoNuevo === telefonoExistente) {\n    esDuplicado = true;\n    leadExistente = item.json;\n    break;\n  }\n}\n\nreturn [{\n  json: {\n    esDuplicado: esDuplicado ? \"si\" : \"no\",\n    leadExistente: leadExistente,\n    leadNuevo: leadNuevo\n  }\n}];"
+      },
+      "id": "7c4d9c69-1a9d-4d8d-a936-e8d1a2783fc8",
+      "name": "Comprobar Duplicados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'duplicado', mensaje: 'Ya existe un lead con ese email o teléfono', lead_existente: $json.leadExistente?.id ?? null }) }}",
+        "options": {
+          "responseCode": 409
+        }
+      },
+      "id": "56197a7e-5ee1-418e-9dbc-82caf2ee4711",
+      "name": "Responder Duplicado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generar ID único para el nuevo lead\nconst ahora = new Date();\nconst pad = (n) => n.toString().padStart(2, '0');\n\nconst fechaStr = `${ahora.getFullYear()}${pad(ahora.getMonth()+1)}${pad(ahora.getDate())}`;\nconst horaStr = `${pad(ahora.getHours())}${pad(ahora.getMinutes())}${pad(ahora.getSeconds())}`;\nconst random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');\n\nconst idLead = `LEAD-${fechaStr}-${horaStr}-${random}`;\n\nconst fechaAhora = ahora.toISOString().replace('T', ' ').substring(0, 19);\n\nconst lead = $json.leadNuevo;\n\nreturn [{\n  json: {\n    id: idLead,\n    nombre: lead.nombre || '',\n    email: lead.email || '',\n    telefono: lead.telefono || '',\n    empresa: lead.empresa || '',\n    estado: 'nuevo',\n    comercial: lead.comercial || 'Sin asignar',\n    fecha_alta: fechaAhora,\n    fecha_ultima_accion: fechaAhora,\n    observaciones: lead.observaciones || '',\n    origen: lead.origen || 'manual'\n  }\n}];"
+      },
+      "id": "7d13122c-0564-40af-b395-6e6fe2f24633",
+      "name": "Generar ID y Preparar Datos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1H1lAZFDVQtYx26SyuLmtvPn63qkCb5g0cF8v1X25ehY/edit?gid=1351226275#gid=1351226275",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}",
+            "nombre": "={{ $json.nombre }}",
+            "email": "={{ $json.email }}",
+            "telefono": "={{ $json.telefono }}",
+            "empresa": "={{ $json.empresa }}",
+            "estado": "={{ $json.estado }}",
+            "comercial": "={{ $json.comercial }}",
+            "fecha_alta": "={{ $json.fecha_alta }}",
+            "fecha_ultima_accion": "={{ $json.fecha_ultima_accion }}",
+            "observaciones": "={{ $json.observaciones }}",
+            "origen": "={{ $json.origen }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "nombre",
+              "displayName": "nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "telefono",
+              "displayName": "telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "empresa",
+              "displayName": "empresa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "comercial",
+              "displayName": "comercial",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha_alta",
+              "displayName": "fecha_alta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha_ultima_accion",
+              "displayName": "fecha_ultima_accion",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "observaciones",
+              "displayName": "observaciones",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "origen",
+              "displayName": "origen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "27576fdf-9f38-4c87-9a34-3c19bd301bd9",
+      "name": "Guardar en Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        288
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZL4IngF0c4bQC5tD",
+          "name": "Google Sheets CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1H1lAZFDVQtYx26SyuLmtvPn63qkCb5g0cF8v1X25ehY/edit?gid=1351226275#gid=1351226275",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Histórico",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_registro": "={{ 'HIS-' + $now.toFormat('yyyyMMddHHmmss') }}",
+            "id_lead": "={{ $json.id }}",
+            "fecha": "={{ $json.fecha_alta }}",
+            "estado_anterior": "=—",
+            "estado_nuevo": "=nuevo",
+            "notas": "=Lead registrado en el sistema",
+            "email_lead": "={{ $json.email }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "id_registro",
+              "displayName": "id_registro",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "id_lead",
+              "displayName": "id_lead",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado_anterior",
+              "displayName": "estado_anterior",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estado_nuevo",
+              "displayName": "estado_nuevo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "comercial ",
+              "displayName": "comercial ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notas",
+              "displayName": "notas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_lead",
+              "displayName": "email_lead",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "7f8defe7-437e-4e60-a2fc-733e3fa7439c",
+      "name": "Guardar en Histórico",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        448,
+        288
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZL4IngF0c4bQC5tD",
+          "name": "Google Sheets CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'ok', mensaje: 'Lead registrado correctamente', id: $json.id, email: $json.email }) }}",
+        "options": {
+          "responseCode": 201
+        }
+      },
+      "id": "4ec97f8b-6f89-4f35-a352-b2dddeab55f8",
+      "name": "Responder Éxito",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "actualizar-estado",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "488f3517-48f7-43fa-a42b-7cf964e3e1b5",
+      "name": "Webhook Actualizar Estado",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1616,
+        960
+      ],
+      "webhookId": "crm-actualizar-estado-001"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-id",
+              "name": "id_lead",
+              "value": "={{ ($json.body.id_lead ?? $json.id_lead ?? '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "field-estado",
+              "name": "nuevo_estado",
+              "value": "={{ ($json.body.nuevo_estado ?? $json.nuevo_estado ?? '').toLowerCase().trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "field-comercial",
+              "name": "comercial",
+              "value": "={{ $json.body.comercial ?? $json.comercial ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-notas",
+              "name": "notas",
+              "value": "={{ $json.body.notas ?? $json.notas ?? '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d94f68fe-5cbf-4670-b2a9-44f6b2a69d2f",
+      "name": "Extraer Datos",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1392,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validar que el estado es uno de los permitidos\nconst estadosPermitidos = [\n  'nuevo',\n  'validado',\n  'contactado',\n  'pendiente',\n  'presupuestado',\n  'cerrado_ganado',\n  'cerrado_perdido'\n];\n\nconst datos = $json;\nconst estadoSolicitado = datos.nuevo_estado || '';\n\nif (!datos.id_lead) {\n  return [{ json: { valido: false, error: 'El campo id_lead es obligatorio' } }];\n}\n\nif (!estadoSolicitado) {\n  return [{ json: { valido: false, error: 'El campo nuevo_estado es obligatorio' } }];\n}\n\nif (!estadosPermitidos.includes(estadoSolicitado)) {\n  return [{ json: { \n    valido: false, \n    error: `Estado no válido: '${estadoSolicitado}'. Estados permitidos: ${estadosPermitidos.join(', ')}` \n  } }];\n}\n\nreturn [{ json: { \n  valido: true, \n  id_lead: datos.id_lead,\n  nuevo_estado: estadoSolicitado,\n  comercial: datos.comercial,\n  notas: datos.notas\n} }];"
+      },
+      "id": "716f5f6f-3d47-477b-9ec0-edff9dad1265",
+      "name": "Validar Estado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1184,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-valido",
+              "leftValue": "={{ $json.valido }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "19b27756-f427-4825-9359-3633043ad191",
+      "name": "¿Datos Inválidos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -960,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'error', mensaje: $json.error }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "403ea1ef-2b4a-4773-a287-214a3ed78087",
+      "name": "Responder Error Validación",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -736,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1H1lAZFDVQtYx26SyuLmtvPn63qkCb5g0cF8v1X25ehY/edit?gid=1351226275#gid=1351226275",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "id",
+              "lookupValue": "={{ $json.id_lead }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "35acab9f-d301-4011-898f-3df638b2f954",
+      "name": "Buscar Lead por ID",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -736,
+        1104
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZL4IngF0c4bQC5tD",
+          "name": "Google Sheets CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-existe",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e0d4f040-07f1-4406-ad90-288d3800ddc2",
+      "name": "¿Lead Encontrado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -512,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'error', mensaje: 'No se encontró ningún lead con ese ID' }) }}",
+        "options": {
+          "responseCode": 404
+        }
+      },
+      "id": "590be820-9567-407a-894e-65f4bd6c93e2",
+      "name": "Responder No Encontrado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -304,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combinar datos del lead existente con la actualización solicitada\nconst leadActual = $json;\nconst datosActualizacion = $('Validar Estado').first().json;\n\nconst ahora = new Date();\nconst pad = (n) => n.toString().padStart(2, '0');\nconst fechaAhora = `${ahora.getFullYear()}-${pad(ahora.getMonth()+1)}-${pad(ahora.getDate())} ${pad(ahora.getHours())}:${pad(ahora.getMinutes())}:${pad(ahora.getSeconds())}`;\n\n// Si no se especifica comercial en la actualización, mantener el anterior\nconst comercialFinal = datosActualizacion.comercial || leadActual.comercial || 'Sin asignar';\n\nreturn [{\n  json: {\n    // Datos para actualizar en Leads\n    id: leadActual.id,\n    email: leadActual.email,\n    nombre: leadActual.nombre,\n    estado_anterior: leadActual.estado,\n    nuevo_estado: datosActualizacion.nuevo_estado,\n    comercial: comercialFinal,\n    fecha_ultima_accion: fechaAhora,\n    notas: datosActualizacion.notas || '',\n    row_number: leadActual.row_number\n  }\n}];"
+      },
+      "id": "7c936c58-bfa5-48b0-8787-c7cd5e4fbfb3",
+      "name": "Preparar Actualización",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -304,
+        1216
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1H1lAZFDVQtYx26SyuLmtvPn63qkCb5g0cF8v1X25ehY/edit?gid=1351226275#gid=1351226275",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}",
+            "estado": "={{ $json.nuevo_estado }}",
+            "comercial": "={{ $json.comercial }}",
+            "fecha_ultima_accion": "={{ $json.fecha_ultima_accion }}",
+            "observaciones": "={{ $json.notas }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": true,
+              "defaultMatch": true,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string"
+            },
+            {
+              "id": "estado",
+              "displayName": "estado",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "display": true,
+              "type": "string"
+            },
+            {
+              "id": "comercial",
+              "displayName": "comercial",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "display": true,
+              "type": "string"
+            },
+            {
+              "id": "fecha_ultima_accion",
+              "displayName": "fecha_ultima_accion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "display": true,
+              "type": "string"
+            },
+            {
+              "id": "observaciones",
+              "displayName": "observaciones",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "display": true,
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e275b58a-6e77-41a1-a9ad-58a48556f49c",
+      "name": "Actualizar Lead en Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -80,
+        1216
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZL4IngF0c4bQC5tD",
+          "name": "Google Sheets CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1H1lAZFDVQtYx26SyuLmtvPn63qkCb5g0cF8v1X25ehY/edit?gid=1351226275#gid=1351226275",
+          "__regex": "https:\\/\\/(?:drive|docs)\\.google\\.com(?:\\/.*|)\\/d\\/([0-9a-zA-Z\\-_]+)(?:\\/.*|)"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Histórico",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id_registro": "={{ 'HIS-' + $now.toFormat('yyyyMMddHHmmss') + '-' + Math.floor(Math.random()*999) }}",
+            "id_lead": "={{ $('Preparar Actualización').first().json.id }}",
+            "fecha": "={{ $('Preparar Actualización').first().json.fecha_ultima_accion }}",
+            "estado_anterior": "={{ $('Preparar Actualización').first().json.estado_anterior }}",
+            "estado_nuevo": "={{ $('Preparar Actualización').first().json.nuevo_estado }}",
+            "comercial": "={{ $('Preparar Actualización').first().json.comercial }}",
+            "notas": "={{ $('Preparar Actualización').first().json.notas }}",
+            "email_lead": "={{ $('Preparar Actualización').first().json.email }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "id_registro",
+              "displayName": "id_registro",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string"
+            },
+            {
+              "id": "id_lead",
+              "displayName": "id_lead",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string"
+            },
+            {
+              "id": "fecha",
+              "displayName": "fecha",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string"
+            },
+            {
+              "id": "estado_anterior",
+              "displayName": "estado_anterior",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string"
+            },
+            {
+              "id": "estado_nuevo",
+              "displayName": "estado_nuevo",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string"
+            },
+            {
+              "id": "comercial",
+              "displayName": "comercial",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string"
+            },
+            {
+              "id": "notas",
+              "displayName": "notas",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string"
+            },
+            {
+              "id": "email_lead",
+              "displayName": "email_lead",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b78d0f8a-a6d4-46fa-84a4-73f53bc0ab70",
+      "name": "Registrar en Histórico",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        144,
+        1216
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZL4IngF0c4bQC5tD",
+          "name": "Google Sheets CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'ok', mensaje: 'Estado actualizado correctamente', id_lead: $('Preparar Actualización').first().json.id, estado_anterior: $('Preparar Actualización').first().json.estado_anterior, estado_nuevo: $('Preparar Actualización').first().json.nuevo_estado }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "de512acd-b23f-4385-a9f9-1de4bd72afdf",
+      "name": "Responder Actualización OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        368,
+        1216
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c1d2f4be-31da-406b-be87-5e6f1ef887b1",
+              "leftValue": "={{ $json.esDuplicado }}",
+              "rightValue": "no",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -224,
+        144
+      ],
+      "id": "69adbb4d-24f7-4f07-a6a0-9282bdfe0fb3",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/2 * * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -1280,
+        528
+      ],
+      "id": "0fef4cbf-d2dd-4278-bb59-82aeb95d7d90",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1H1lAZFDVQtYx26SyuLmtvPn63qkCb5g0cF8v1X25ehY/edit?gid=1403092383#gid=1403092383",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Fuente_Leads",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "enviado",
+              "lookupValue": "no"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -896,
+        528
+      ],
+      "id": "b7627759-92bc-4fab-b7c3-e953fe3ff163",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZL4IngF0c4bQC5tD",
+          "name": "Google Sheets CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const todos = $input.all();\nconst maximo = 1;\nconst seleccionados = todos.slice(0, maximo);\n\nreturn seleccionados.map((item, index) => ({\n  json: {\n    nombre: item.json.nombre || '',\n    email: (item.json.email || '').toLowerCase().trim(),\n    telefono: (item.json.telefono || '').toString().replace(/\\s/g, ''),\n    empresa: item.json.empresa || '',\n    comercial: item.json.comercial || 'Sin asignar',\n    origen: item.json.origen || 'fuente_leads',\n    observaciones: item.json.observaciones || '',\n    _email_original: (item.json.email || '').toLowerCase().trim(),\n    _indice: index\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -688,
+        528
+      ],
+      "id": "d1156c68-69cd-473f-a686-1f78565df4e0",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/alta-lead",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "nombre",
+              "value": "={{ $json.nombre }}"
+            },
+            {
+              "name": "email",
+              "value": "={{ $json.email }}"
+            },
+            {
+              "name": "telefono",
+              "value": "={{ $json.telefono }}"
+            },
+            {
+              "name": "empresa",
+              "value": "={{ $json.empresa }}"
+            },
+            {
+              "name": "comercial",
+              "value": "={{ $json.comercial }}"
+            },
+            {
+              "name": "origen",
+              "value": "={{ $json.origen }}"
+            },
+            {
+              "name": "observaciones",
+              "value": "={{ $json.observaciones }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -480,
+        528
+      ],
+      "id": "8c45be80-4b6a-499f-9b13-9bf99c8cade8",
+      "name": "HTTP Request",
+      "executeOnce": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1H1lAZFDVQtYx26SyuLmtvPn63qkCb5g0cF8v1X25ehY/edit?gid=1403092383#gid=1403092383",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Fuente_Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "enviado": "si",
+            "fecha_envio": "={{ $now.toFormat('yyyy-MM-dd HH:mm:ss') }}",
+            "email": "={{ $('Code in JavaScript').item.json.email }}"
+          },
+          "matchingColumns": [
+            "email"
+          ],
+          "schema": [
+            {
+              "id": "nombre",
+              "displayName": "nombre",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "telefono",
+              "displayName": "telefono",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "empresa",
+              "displayName": "empresa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "comercial",
+              "displayName": "comercial",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "origen",
+              "displayName": "origen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "observaciones",
+              "displayName": "observaciones",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "enviado",
+              "displayName": "enviado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fecha_envio",
+              "displayName": "fecha_envio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -64,
+        528
+      ],
+      "id": "71c24b9e-26ca-4e9d-a406-4fc0532cb218",
+      "name": "Update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ZL4IngF0c4bQC5tD",
+          "name": "Google Sheets CRM"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "amount": 3
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -272,
+        528
+      ],
+      "id": "d8ff425c-5f9f-47b2-8322-fd3092b87ec6",
+      "name": "Wait",
+      "webhookId": "a8d6802a-9818-4433-bf93-ae7f0e7e5f70"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Alta Lead": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Datos": {
+      "main": [
+        [
+          {
+            "node": "Leer Todos los Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer Todos los Leads": {
+      "main": [
+        [
+          {
+            "node": "Comprobar Duplicados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comprobar Duplicados": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar ID y Preparar Datos": {
+      "main": [
+        [
+          {
+            "node": "Guardar en Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar en Leads": {
+      "main": [
+        [
+          {
+            "node": "Guardar en Histórico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar en Histórico": {
+      "main": [
+        [
+          {
+            "node": "Responder Éxito",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Actualizar Estado": {
+      "main": [
+        [
+          {
+            "node": "Extraer Datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Datos": {
+      "main": [
+        [
+          {
+            "node": "Validar Estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Estado": {
+      "main": [
+        [
+          {
+            "node": "¿Datos Inválidos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Datos Inválidos?": {
+      "main": [
+        [
+          {
+            "node": "Responder Error Validación",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Buscar Lead por ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Lead por ID": {
+      "main": [
+        [
+          {
+            "node": "¿Lead Encontrado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Lead Encontrado?": {
+      "main": [
+        [
+          {
+            "node": "Responder No Encontrado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Actualización",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Actualización": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Lead en Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Lead en Sheets": {
+      "main": [
+        [
+          {
+            "node": "Registrar en Histórico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar en Histórico": {
+      "main": [
+        [
+          {
+            "node": "Responder Actualización OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Responder Duplicado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generar ID y Preparar Datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        []
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "986dd56e-a993-4d89-87c0-15ab0852cbb0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "95da355b11989f968139c1e95795a154c084c50d48c426c7ab972227d78c6fe5"
+  },
+  "id": "vqVOlpi-qSCGhCwiCTWu9",
+  "tags": [
+    {
+      "updatedAt": "2026-03-16T08:44:35.744Z",
+      "createdAt": "2026-03-16T08:44:35.744Z",
+      "id": "vOSijQVkTXfqLKay",
+      "name": "CRM"
+    }
+  ]
+}
